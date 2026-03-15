@@ -30,6 +30,8 @@ export interface AllowedRoot {
 export interface ContainerConfig {
   additionalMounts?: AdditionalMount[];
   timeout?: number; // Default: 300000 (5 minutes)
+  dockerNetwork?: string; // Docker network name (e.g., "nanoclaw-researcher")
+  httpProxy?: string; // HTTP proxy URL (e.g., "http://172.20.0.2:3128")
 }
 
 export interface RegisteredGroup {

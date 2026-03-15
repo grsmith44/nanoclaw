@@ -62,3 +62,23 @@ systemctl --user restart nanoclaw
 ## Container Build Cache
 
 The container buildkit caches the build context aggressively. `--no-cache` alone does NOT invalidate COPY steps — the builder's volume retains stale files. To force a truly clean rebuild, prune the builder then re-run `./container/build.sh`.
+
+## Network Isolation
+
+Groups can be assigned to Docker internal networks with optional HTTP proxy routing. Networks and proxies are pre-configured by Ansible — NanoClaw only assigns groups to them.
+
+Available networks:
+- `nanoclaw-researcher` — Squid proxy at `http://172.20.0.2:3128`
+- `nanoclaw-operator` — no internet access
+- `nanoclaw-coder` — Squid proxy at `http://172.22.0.2:3128`
+
+Register a group with network isolation:
+```bash
+npx tsx setup/index.ts --step register \
+  --jid <jid> --name <name> --folder <folder> --trigger <trigger> \
+  --network nanoclaw-researcher --proxy http://172.20.0.2:3128
+```
+
+The agent's `register_group` IPC tool also accepts `network` and `proxy` parameters.
+
+Groups without `--network` use Docker's default bridge (unrestricted internet).

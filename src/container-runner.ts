@@ -215,11 +215,22 @@ function buildVolumeMounts(
 function buildContainerArgs(
   mounts: VolumeMount[],
   containerName: string,
+  group: RegisteredGroup,
 ): string[] {
   const args: string[] = ['run', '-i', '--rm', '--name', containerName];
 
+  if (group.containerConfig?.dockerNetwork) {
+    args.push('--network', group.containerConfig.dockerNetwork);
+  }
+
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
+
+  if (group.containerConfig?.httpProxy) {
+    args.push('-e', `HTTP_PROXY=${group.containerConfig.httpProxy}`);
+    args.push('-e', `HTTPS_PROXY=${group.containerConfig.httpProxy}`);
+    args.push('-e', `NO_PROXY=localhost,127.0.0.1,${CONTAINER_HOST_GATEWAY}`);
+  }
 
   // Route API traffic through the credential proxy (containers never see real secrets)
   args.push(
@@ -278,7 +289,7 @@ export async function runContainerAgent(
   const mounts = buildVolumeMounts(group, input.isMain);
   const safeName = group.folder.replace(/[^a-zA-Z0-9-]/g, '-');
   const containerName = `nanoclaw-${safeName}-${Date.now()}`;
-  const containerArgs = buildContainerArgs(mounts, containerName);
+  const containerArgs = buildContainerArgs(mounts, containerName, group);
 
   logger.debug(
     {
@@ -312,6 +323,26 @@ export async function runContainerAgent(
     });
 
     onProcess(container, containerName);
+
+    // Internal Docker networks block access to the host gateway.
+    // Connect the container to the default bridge so it can reach the
+    // credential proxy on the docker0 gateway (172.17.0.1).
+    // Retry briefly — the container may not be fully created yet.
+    if (group.containerConfig?.dockerNetwork) {
+      const attachBridge = (attempt: number) => {
+        exec(`docker network connect bridge ${containerName}`, (err) => {
+          if (err && attempt < 3) {
+            setTimeout(() => attachBridge(attempt + 1), 500);
+          } else if (err) {
+            logger.warn(
+              { containerName, error: err.message },
+              'Failed to attach bridge network for credential proxy access',
+            );
+          }
+        });
+      };
+      setTimeout(() => attachBridge(0), 500);
+    }
 
     let stdout = '';
     let stderr = '';

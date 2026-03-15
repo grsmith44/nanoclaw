@@ -11,6 +11,7 @@ import { STORE_DIR } from '../src/config.ts';
 import { initDatabase, setRegisteredGroup } from '../src/db.ts';
 import { isValidGroupFolder } from '../src/group-folder.ts';
 import { logger } from '../src/logger.ts';
+import { RegisteredGroup } from '../src/types.ts';
 import { emitStatus } from './status.ts';
 
 interface RegisterArgs {
@@ -22,6 +23,8 @@ interface RegisterArgs {
   requiresTrigger: boolean;
   isMain: boolean;
   assistantName: string;
+  network: string;
+  proxy: string;
 }
 
 function parseArgs(args: string[]): RegisterArgs {
@@ -34,6 +37,8 @@ function parseArgs(args: string[]): RegisterArgs {
     requiresTrigger: true,
     isMain: false,
     assistantName: 'Andy',
+    network: '',
+    proxy: '',
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -61,6 +66,12 @@ function parseArgs(args: string[]): RegisterArgs {
         break;
       case '--assistant-name':
         result.assistantName = args[++i] || 'Andy';
+        break;
+      case '--network':
+        result.network = args[++i] || '';
+        break;
+      case '--proxy':
+        result.proxy = args[++i] || '';
         break;
     }
   }
@@ -100,6 +111,10 @@ export async function run(args: string[]): Promise<void> {
   // Initialize database (creates schema + runs migrations)
   initDatabase();
 
+  const containerConfig: RegisteredGroup['containerConfig'] = {};
+  if (parsed.network) containerConfig!.dockerNetwork = parsed.network;
+  if (parsed.proxy) containerConfig!.httpProxy = parsed.proxy;
+
   setRegisteredGroup(parsed.jid, {
     name: parsed.name,
     folder: parsed.folder,
@@ -107,6 +122,7 @@ export async function run(args: string[]): Promise<void> {
     added_at: new Date().toISOString(),
     requiresTrigger: parsed.requiresTrigger,
     isMain: parsed.isMain,
+    ...(Object.keys(containerConfig!).length > 0 ? { containerConfig } : {}),
   });
 
   logger.info('Wrote registration to SQLite');

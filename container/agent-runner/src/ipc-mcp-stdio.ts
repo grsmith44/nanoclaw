@@ -307,6 +307,8 @@ Use available_groups.json to find the JID for a group. The folder name must be c
     name: z.string().describe('Display name for the group'),
     folder: z.string().describe('Channel-prefixed folder name (e.g., "whatsapp_family-chat", "telegram_dev-team")'),
     trigger: z.string().describe('Trigger word (e.g., "@Andy")'),
+    network: z.string().optional().describe('Docker network name (e.g., "nanoclaw-researcher")'),
+    proxy: z.string().optional().describe('HTTP proxy URL (e.g., "http://172.20.0.2:3128")'),
   },
   async (args) => {
     if (!isMain) {
@@ -316,12 +318,17 @@ Use available_groups.json to find the JID for a group. The folder name must be c
       };
     }
 
+    const containerConfig: Record<string, string> = {};
+    if (args.network) containerConfig.dockerNetwork = args.network;
+    if (args.proxy) containerConfig.httpProxy = args.proxy;
+
     const data = {
       type: 'register_group',
       jid: args.jid,
       name: args.name,
       folder: args.folder,
       trigger: args.trigger,
+      ...(Object.keys(containerConfig).length > 0 ? { containerConfig } : {}),
       timestamp: new Date().toISOString(),
     };
 
