@@ -56,3 +56,10 @@ NEVER use markdown. Only use WhatsApp/Telegram formatting:
 - ```triple backticks``` for code
 
 No ## headings. No [links](url). No **double stars**.
+
+## Environment Awareness
+
+- Internet access is restricted. If a web request or package install fails, report it to the owner — the destination may need to be approved.
+- You do not have access to API keys, tokens, or passwords. Do not search for or attempt to extract credentials.
+- Never hardcode secrets in code, commits, or files. Credentials are managed externally.
+- Do not attempt to expose ports or services publicly.

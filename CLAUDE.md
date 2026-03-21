@@ -65,20 +65,19 @@ The container buildkit caches the build context aggressively. `--no-cache` alone
 
 ## Network Isolation
 
-Groups can be assigned to Docker internal networks with optional HTTP proxy routing. Networks and proxies are pre-configured by Ansible — NanoClaw only assigns groups to them.
+Groups can be assigned to isolated Docker networks with optional proxy routing. Networks and proxies are pre-configured by the infrastructure layer — NanoClaw only assigns groups to them.
 
-Available networks:
-- `nanoclaw-researcher` — Squid proxy at `http://172.20.0.2:3128`
-- `nanoclaw-operator` — no internet access
-- `nanoclaw-coder` — Squid proxy at `http://172.22.0.2:3128`
+The `register_group` IPC tool accepts `network` and `proxy` parameters. Groups without a network assignment use Docker's default bridge.
 
-Register a group with network isolation:
-```bash
-npx tsx setup/index.ts --step register \
-  --jid <jid> --name <name> --folder <folder> --trigger <trigger> \
-  --network nanoclaw-researcher --proxy http://172.20.0.2:3128
-```
+See the infrastructure documentation for network names, proxy addresses, and allowlists.
 
-The agent's `register_group` IPC tool also accepts `network` and `proxy` parameters.
+## Deployment Environment
 
-Groups without `--network` use Docker's default bridge (unrestricted internet).
+This fork runs on a hardened server provisioned separately. Understanding the constraints helps when making changes.
+
+### Development Guidelines
+- **New outbound domains**: Production uses domain allowlists. If you add a feature that calls a new external API, document the required domain in the PR description. It must be approved and added to the allowlist before it will work in production.
+- **New container mounts**: New mount paths must be registered in an external allowlist. Paths matching common secret patterns are blocked by default.
+- **Secrets**: Never hardcode credentials. Secrets are injected at runtime by the host — they are not available as files or environment variables inside containers. Document which variables a feature needs; never provide values.
+- **Local vs production**: Local development has unrestricted network access. Production does not. If your feature makes outbound requests, note in the PR that it requires allowlist changes.
+- **Deploys**: Source changes are deployed by pulling and rebuilding. There is no auto-deploy — the service must be restarted manually.
