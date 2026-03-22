@@ -9,6 +9,7 @@ import path from 'path';
 import {
   CONTAINER_IMAGE,
   CONTAINER_MAX_OUTPUT_SIZE,
+  CONTAINER_MEMORY_LIMIT,
   CONTAINER_TIMEOUT,
   CREDENTIAL_PROXY_PORT,
   DATA_DIR,
@@ -217,7 +218,16 @@ function buildContainerArgs(
   containerName: string,
   group: RegisteredGroup,
 ): string[] {
-  const args: string[] = ['run', '-i', '--rm', '--name', containerName];
+  const args: string[] = [
+    'run',
+    '-i',
+    '--rm',
+    '--init', // tini as PID 1 — forwards SIGTERM to child processes
+    '--memory',
+    CONTAINER_MEMORY_LIMIT,
+    '--name',
+    containerName,
+  ];
 
   if (group.containerConfig?.dockerNetwork) {
     args.push('--network', group.containerConfig.dockerNetwork);
