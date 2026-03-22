@@ -226,17 +226,22 @@ function buildContainerArgs(
   // Pass host timezone so container's local time matches the user's
   args.push('-e', `TZ=${TIMEZONE}`);
 
+  // Resolve credential proxy address: on --internal networks, use a relay
+  // container on the internal network; otherwise use the host gateway directly.
+  const credentialHost =
+    group.containerConfig?.credentialRelayIp || CONTAINER_HOST_GATEWAY;
+
   if (group.containerConfig?.httpProxy) {
     args.push('-e', `HTTP_PROXY=${group.containerConfig.httpProxy}`);
     args.push('-e', `HTTPS_PROXY=${group.containerConfig.httpProxy}`);
-    args.push('-e', `NO_PROXY=localhost,127.0.0.1,${CONTAINER_HOST_GATEWAY}`);
+    const noProxyHosts = ['localhost', '127.0.0.1', CONTAINER_HOST_GATEWAY];
+    if (credentialHost !== CONTAINER_HOST_GATEWAY) {
+      noProxyHosts.push(credentialHost);
+    }
+    args.push('-e', `NO_PROXY=${noProxyHosts.join(',')}`);
   }
 
   // Route API traffic through the credential proxy (containers never see real secrets).
-  // On --internal networks, containers can't reach the host directly, so a
-  // credential relay container (socat) on the internal network forwards to the host.
-  const credentialHost =
-    group.containerConfig?.credentialRelayIp || CONTAINER_HOST_GATEWAY;
   args.push(
     '-e',
     `ANTHROPIC_BASE_URL=http://${credentialHost}:${CREDENTIAL_PROXY_PORT}`,
