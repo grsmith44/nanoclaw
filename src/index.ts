@@ -148,7 +148,9 @@ export function _setRegisteredGroups(
  * Process all pending messages for a group.
  * Called by the GroupQueue when it's this group's turn.
  */
-async function processGroupMessages(chatJid: string): Promise<boolean> {
+async function processGroupMessages(
+  chatJid: string,
+): Promise<boolean | { success: false; errorType: 'generic' | 'rate_limit' }> {
   const group = registeredGroups[chatJid];
   if (!group) return true;
 
@@ -242,7 +244,7 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
   await channel.setTyping?.(chatJid, false);
   if (idleTimer) clearTimeout(idleTimer);
 
-  if (output === 'error' || hadError) {
+  if (output === 'error' || output === 'rate_limit' || hadError) {
     // If we already sent output to the user, don't roll back the cursor —
     // the user got their response and re-processing would send duplicates.
     if (outputSentToUser) {
@@ -255,11 +257,15 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
     // Roll back cursor so retries can re-process these messages
     lastAgentTimestamp[chatJid] = previousCursor;
     saveState();
+
+    const errorType = output === 'rate_limit' ? 'rate_limit' : 'generic';
     logger.warn(
-      { group: group.name },
+      { group: group.name, errorType },
       'Agent error, rolled back message cursor for retry',
     );
-    return false;
+    return errorType === 'rate_limit'
+      ? { success: false as const, errorType: 'rate_limit' as const }
+      : false;
   }
 
   return true;
@@ -270,7 +276,7 @@ async function runAgent(
   prompt: string,
   chatJid: string,
   onOutput?: (output: ContainerOutput) => Promise<void>,
-): Promise<'success' | 'error'> {
+): Promise<'success' | 'error' | 'rate_limit'> {
   const isMain = group.isMain === true;
   const sessionId = sessions[group.folder];
 
@@ -332,11 +338,15 @@ async function runAgent(
     }
 
     if (output.status === 'error') {
+      const isRateLimit =
+        output.error?.includes('rate_limit') ||
+        output.error?.includes('rate limit') ||
+        output.error?.includes('429');
       logger.error(
-        { group: group.name, error: output.error },
+        { group: group.name, error: output.error, isRateLimit },
         'Container agent error',
       );
-      return 'error';
+      return isRateLimit ? 'rate_limit' : 'error';
     }
 
     return 'success';

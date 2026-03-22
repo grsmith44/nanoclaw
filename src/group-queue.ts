@@ -13,6 +13,8 @@ interface QueuedTask {
 
 const MAX_RETRIES = 5;
 const BASE_RETRY_MS = 5000;
+const RATE_LIMIT_BASE_RETRY_MS = 60000; // 1 minute base for rate limit errors
+const RATE_LIMIT_MAX_RETRIES = 3;
 
 interface GroupState {
   active: boolean;
@@ -25,14 +27,16 @@ interface GroupState {
   containerName: string | null;
   groupFolder: string | null;
   retryCount: number;
+  lastErrorType: 'generic' | 'rate_limit';
 }
 
 export class GroupQueue {
   private groups = new Map<string, GroupState>();
   private activeCount = 0;
   private waitingGroups: string[] = [];
-  private processMessagesFn: ((groupJid: string) => Promise<boolean>) | null =
-    null;
+  private processMessagesFn:
+    | ((groupJid: string) => Promise<boolean | { success: false; errorType: 'generic' | 'rate_limit' }>)
+    | null = null;
   private shuttingDown = false;
 
   private getGroup(groupJid: string): GroupState {
@@ -49,13 +53,16 @@ export class GroupQueue {
         containerName: null,
         groupFolder: null,
         retryCount: 0,
+        lastErrorType: 'generic',
       };
       this.groups.set(groupJid, state);
     }
     return state;
   }
 
-  setProcessMessagesFn(fn: (groupJid: string) => Promise<boolean>): void {
+  setProcessMessagesFn(
+    fn: (groupJid: string) => Promise<boolean | { success: false; errorType: 'generic' | 'rate_limit' }>,
+  ): void {
     this.processMessagesFn = fn;
   }
 
@@ -211,11 +218,15 @@ export class GroupQueue {
 
     try {
       if (this.processMessagesFn) {
-        const success = await this.processMessagesFn(groupJid);
-        if (success) {
+        const result = await this.processMessagesFn(groupJid);
+        if (result === true) {
           state.retryCount = 0;
-        } else {
+          state.lastErrorType = 'generic';
+        } else if (result === false) {
           this.scheduleRetry(groupJid, state);
+        } else {
+          // Rich error result with error type
+          this.scheduleRetry(groupJid, state, result.errorType);
         }
       }
     } catch (err) {
@@ -260,20 +271,32 @@ export class GroupQueue {
     }
   }
 
-  private scheduleRetry(groupJid: string, state: GroupState): void {
+  scheduleRetry(
+    groupJid: string,
+    state: GroupState,
+    errorType: 'generic' | 'rate_limit' = 'generic',
+  ): void {
     state.retryCount++;
-    if (state.retryCount > MAX_RETRIES) {
+    state.lastErrorType = errorType;
+
+    const maxRetries =
+      errorType === 'rate_limit' ? RATE_LIMIT_MAX_RETRIES : MAX_RETRIES;
+    const baseMs =
+      errorType === 'rate_limit' ? RATE_LIMIT_BASE_RETRY_MS : BASE_RETRY_MS;
+
+    if (state.retryCount > maxRetries) {
       logger.error(
-        { groupJid, retryCount: state.retryCount },
+        { groupJid, retryCount: state.retryCount, errorType },
         'Max retries exceeded, dropping messages (will retry on next incoming message)',
       );
       state.retryCount = 0;
+      state.lastErrorType = 'generic';
       return;
     }
 
-    const delayMs = BASE_RETRY_MS * Math.pow(2, state.retryCount - 1);
+    const delayMs = baseMs * Math.pow(2, state.retryCount - 1);
     logger.info(
-      { groupJid, retryCount: state.retryCount, delayMs },
+      { groupJid, retryCount: state.retryCount, maxRetries, delayMs, errorType },
       'Scheduling retry with backoff',
     );
     setTimeout(() => {
