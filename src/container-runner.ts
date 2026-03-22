@@ -232,10 +232,14 @@ function buildContainerArgs(
     args.push('-e', `NO_PROXY=localhost,127.0.0.1,${CONTAINER_HOST_GATEWAY}`);
   }
 
-  // Route API traffic through the credential proxy (containers never see real secrets)
+  // Route API traffic through the credential proxy (containers never see real secrets).
+  // On --internal networks, containers can't reach the host directly, so a
+  // credential relay container (socat) on the internal network forwards to the host.
+  const credentialHost =
+    group.containerConfig?.credentialRelayIp || CONTAINER_HOST_GATEWAY;
   args.push(
     '-e',
-    `ANTHROPIC_BASE_URL=http://${CONTAINER_HOST_GATEWAY}:${CREDENTIAL_PROXY_PORT}`,
+    `ANTHROPIC_BASE_URL=http://${credentialHost}:${CREDENTIAL_PROXY_PORT}`,
   );
 
   // Mirror the host's auth method with a placeholder value.

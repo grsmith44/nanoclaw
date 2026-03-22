@@ -32,6 +32,7 @@ export interface ContainerConfig {
   timeout?: number; // Default: 300000 (5 minutes)
   dockerNetwork?: string; // Docker network name (e.g., "nanoclaw-researcher")
   httpProxy?: string; // HTTP proxy URL (e.g., "http://172.20.0.2:3128")
+  credentialRelayIp?: string; // IP of credential proxy relay on internal networks
 }
 
 export interface RegisteredGroup {
