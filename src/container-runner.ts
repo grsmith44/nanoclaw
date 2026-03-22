@@ -333,26 +333,6 @@ export async function runContainerAgent(
 
     onProcess(container, containerName);
 
-    // Internal Docker networks block access to the host gateway.
-    // Connect the container to the default bridge so it can reach the
-    // credential proxy on the docker0 gateway (172.17.0.1).
-    // Retry briefly — the container may not be fully created yet.
-    if (group.containerConfig?.dockerNetwork) {
-      const attachBridge = (attempt: number) => {
-        exec(`docker network connect bridge ${containerName}`, (err) => {
-          if (err && attempt < 3) {
-            setTimeout(() => attachBridge(attempt + 1), 500);
-          } else if (err) {
-            logger.warn(
-              { containerName, error: err.message },
-              'Failed to attach bridge network for credential proxy access',
-            );
-          }
-        });
-      };
-      setTimeout(() => attachBridge(0), 500);
-    }
-
     let stdout = '';
     let stderr = '';
     let stdoutTruncated = false;
