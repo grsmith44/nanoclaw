@@ -35,7 +35,11 @@ export class GroupQueue {
   private activeCount = 0;
   private waitingGroups: string[] = [];
   private processMessagesFn:
-    | ((groupJid: string) => Promise<boolean | { success: false; errorType: 'generic' | 'rate_limit' }>)
+    | ((
+        groupJid: string,
+      ) => Promise<
+        boolean | { success: false; errorType: 'generic' | 'rate_limit' }
+      >)
     | null = null;
   private shuttingDown = false;
 
@@ -61,7 +65,11 @@ export class GroupQueue {
   }
 
   setProcessMessagesFn(
-    fn: (groupJid: string) => Promise<boolean | { success: false; errorType: 'generic' | 'rate_limit' }>,
+    fn: (
+      groupJid: string,
+    ) => Promise<
+      boolean | { success: false; errorType: 'generic' | 'rate_limit' }
+    >,
   ): void {
     this.processMessagesFn = fn;
   }
@@ -296,7 +304,13 @@ export class GroupQueue {
 
     const delayMs = baseMs * Math.pow(2, state.retryCount - 1);
     logger.info(
-      { groupJid, retryCount: state.retryCount, maxRetries, delayMs, errorType },
+      {
+        groupJid,
+        retryCount: state.retryCount,
+        maxRetries,
+        delayMs,
+        errorType,
+      },
       'Scheduling retry with backoff',
     );
     setTimeout(() => {
